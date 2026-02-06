@@ -1,123 +1,276 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const SmartBinApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SmartBinApp extends StatelessWidget {
+  const SmartBinApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Smart Bin Controller',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        useMaterial3: true,
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => const MyHomePage(title: 'Flutter Demo Home Page'),
+        '/': (context) => const DashboardScreen(),
       },
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _DashboardScreenState extends State<DashboardScreen> {
+  bool _isConnected = false;
+  bool _isLidOpen = false;
+  double _distance = 0.0;
+  Timer? _simulationTimer;
 
-  void _incrementCounter() {
+  // Simulate receiving data from Arduino
+  void _toggleConnection() {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _isConnected = !_isConnected;
     });
+
+    if (_isConnected) {
+      // Start simulation
+      _simulationTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+        if (mounted) {
+          setState(() {
+            // Simulate random distance between 5cm and 50cm
+            _distance = 5 + Random().nextInt(45).toDouble();
+            
+            // Auto-open logic simulation (matching Arduino logic)
+            if (_distance < 20 && !_isLidOpen) {
+              _isLidOpen = true;
+              // Auto-close after 5 seconds simulation
+              Future.delayed(const Duration(seconds: 5), () {
+                if (mounted) {
+                  setState(() {
+                    _isLidOpen = false;
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+    } else {
+      _simulationTimer?.cancel();
+      setState(() {
+        _distance = 0.0;
+        _isLidOpen = false;
+      });
+    }
+  }
+
+  void _manualOpen() {
+    if (!_isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please connect to device first')),
+      );
+      return;
+    }
+    setState(() {
+      _isLidOpen = true;
+    });
+    // In a real app, you would send 'O' character to Bluetooth here
+  }
+
+  void _manualClose() {
+    if (!_isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please connect to device first')),
+      );
+      return;
+    }
+    setState(() {
+      _isLidOpen = false;
+    });
+    // In a real app, you would send 'C' character to Bluetooth here
+  }
+
+  @override
+  void dispose() {
+    _simulationTimer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
+        title: const Text('Smart Bin Controller'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        actions: [
+          IconButton(
+            icon: Icon(_isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled),
+            onPressed: _toggleConnection,
+            tooltip: _isConnected ? 'Disconnect' : 'Connect',
+          )
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text('$_counter', style: Theme.of(context).textTheme.headlineMedium),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Connection Status Card
+            Card(
+              elevation: 2,
+              color: _isConnected ? Colors.green.shade50 : Colors.red.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isConnected ? Icons.check_circle : Icons.error_outline,
+                      color: _isConnected ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _isConnected ? "System Connected" : "Disconnected",
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Lid Status Visualization
+            Center(
+              child: Column(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 500),
+                    width: 150,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      color: _isLidOpen ? Colors.orange.shade100 : Colors.grey.shade200,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _isLidOpen ? Colors.orange : Colors.grey,
+                        width: 4,
+                      ),
+                    ),
+                    child: Icon(
+                      _isLidOpen ? Icons.delete_outline : Icons.delete,
+                      size: 80,
+                      color: _isLidOpen ? Colors.orange : Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _isLidOpen ? "LID OPEN" : "LID CLOSED",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: _isLidOpen ? Colors.orange : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Sensor Data
+            const Text(
+              "Sensor Data",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Distance Object"),
+                      Text(
+                        "${_distance.toStringAsFixed(1)} cm",
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value: (_distance / 50).clamp(0.0, 1.0), // Max 50cm for visual
+                    backgroundColor: Colors.grey.shade200,
+                    color: _distance < 20 ? Colors.red : Colors.blue,
+                    minHeight: 10,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _distance < 20 ? "Object Detected!" : "Clear",
+                    style: TextStyle(
+                      color: _distance < 20 ? Colors.red : Colors.grey,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Manual Controls
+            const Text(
+              "Manual Controls",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _manualOpen,
+                    icon: const Icon(Icons.arrow_upward),
+                    label: const Text("OPEN"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _manualClose,
+                    icon: const Icon(Icons.arrow_downward),
+                    label: const Text("CLOSE"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
